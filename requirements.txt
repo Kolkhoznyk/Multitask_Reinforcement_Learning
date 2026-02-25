@@ -1,0 +1,8 @@
+gymnasium
+matplotlib
+metaworld
+numpy
+optuna
+stable-baselines3
+tensorboard
+torch
