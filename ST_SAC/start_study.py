@@ -18,7 +18,7 @@ def main():
         "reward_function_version": "v3",
         "terminate_on_success": False,
 
-        # Parallelisierung
+        # Parallel Envs
         "n_envs": 1,
         "use_parallel": True,
         "start_method": "spawn",
@@ -32,9 +32,8 @@ def main():
 
         # Training
         "total_timesteps": 75_000,
-        # "max_episode_steps": 150,
-
-        # SAC – feste (nicht getunte) Parameter
+    
+        # SAC "fix" Constants (not sampled by Optuna)
         "policy": "MlpPolicy",
         "verbose": 1,
         
@@ -74,7 +73,7 @@ def main():
         # =========================================================
         
         "train_freq_choices": 1,
-        "gradient_steps_choices": 1,  # Tupel mit einem Element!
+        "gradient_steps_choices": 1, 
 
         "target_entropy": "auto",
 

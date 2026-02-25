@@ -1,26 +1,19 @@
-import os
 import numpy as np
 import optuna
 import torch
-import metaworld
+from typing import cast
 
 # SB3
-from stable_baselines3 import SAC, PPO
+from stable_baselines3 import SAC
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
-
-# Gym / MetaWorld env creation (dein gym.make wie im Train-Skript)
 import gymnasium as gym
 
-
-# -----------------------------
-# 1) Pruning-Callback (optional aber sehr sinnvoll)
-# -----------------------------
 class TrialEvalCallback(BaseCallback):
     """
-    Evaluiert alle eval_freq steps, reported an Optuna und pruned ggf.
+    Evaluates all eval_freq steps, reported in Optuna and pruned if necessary.
     """
     def __init__(self, eval_env, trial: optuna.Trial, n_eval_episodes: int, eval_freq: int, deterministic: bool = True):
         super().__init__()
@@ -41,20 +34,16 @@ class TrialEvalCallback(BaseCallback):
                 return_episode_rewards=False,
             )
             # report an Optuna
-            self.trial.report(mean_reward, step=self.n_calls)
-
-            # prune?
-            # if self.trial.should_prune():
-            #     return False
+            self.trial.report(cast(float, mean_reward), step=self.n_calls)
 
         return True
 
 class OptunaStudy:
     def __init__(
         self,
-        # ---- Env-Konstanten (alles was du in gym.make hattest)
-        benchmark_id: str,                 # "Meta-World/MT1"
-        env_name: str,                     # "reach-v3"
+        # ---- Env-Constants
+        benchmark_id: str,                 
+        env_name: str,               
         algorithm: str,
         reward_function_version: str = "v3",
         max_episode_steps: int = 200,
@@ -64,20 +53,20 @@ class OptunaStudy:
         start_method: str = "spawn",
         n_envs_choices = (1,8,32,128),
 
-        # ---- Training/Eval Konstanten
+        # ---- Training/Eval Constants
         total_timesteps: int = 50_000,
         eval_freq: int = 25_000,
         n_eval_episodes: int = 10,
         deterministic_eval: bool = True,
         device: str = "auto",
 
-        # ---- SAC “fixe” Konstanten (nicht von Optuna gesampled)
+        # ---- SAC “fix” Constants (not sampled by Optuna)
         policy: str = "MlpPolicy",
         verbose: int = 0,
         ent_coef: str = "auto",
 
-        # ---- Optuna Search-Ranges (die du „konstant“ übergeben willst)
-        buffersize: int = (300000,),
+        # ---- Optuna Search-Ranges
+        buffersize: int = (300000),
         learning_starts: int = 10000,
         lr_min: float = 1e-5,
         lr_max: float = 3e-4,
@@ -94,7 +83,7 @@ class OptunaStudy:
         activation_fn = torch.nn.ReLU,
         log_std_init = -3,
 
-        # ---- Seed offsets für Train/Eval (damit reproduzierbar)
+        # ---- Seed offsets for Train/Eval
         seed: int = 42,
         eval_seed_offset: int = -2,
         final_eval_seed_offset: int = -3,
@@ -156,8 +145,8 @@ class OptunaStudy:
         # Create singel Meta-World environment
         def _init():
             env = gym.make(
-                self.benchmark_id,              # "Meta-World/MT1"
-                env_name=self.env_name,         # "reach-v3"
+                self.benchmark_id,             
+                env_name=self.env_name,         
                 seed=self.seed + rank,
                 reward_function_version=self.reward_function_version,
                 max_episode_steps=max_episode_steps,
@@ -187,15 +176,15 @@ class OptunaStudy:
     def objective(self, trial: optuna.Trial) -> float:
         # Optuna Choices
         self.n_envs = trial.suggest_categorical("n_envs", self.n_envs_choices)
-        max_episode_steps = trial.suggest_categorical("max_epsiode_steps", self.max_episode_steps)
-        buffersize = trial.suggest_categorical("buffersize", self.buffersize)
+        max_episode_steps = trial.suggest_categorical("max_epsiode_steps", [self.max_episode_steps])
+        buffersize = trial.suggest_categorical("buffersize", [self.buffersize])
         learning_rate = trial.suggest_float("learning_rate", self.lr_min, self.lr_max, log=True)
         batch_size = trial.suggest_categorical("batch_size", self.batch_sizes)
         gamma = trial.suggest_float("gamma", self.gamma_min, self.gamma_max)
         tau = trial.suggest_float("tau", self.tau_min, self.tau_max, log=True)
 
-        # train_freq = trial.suggest_categorical("train_freq", self.train_freq_choices)
-        # gradient_steps = trial.suggest_categorical("gradient_steps", self.gradient_steps_choices)
+        train_freq = trial.suggest_categorical("train_freq", self.train_freq_choices)
+        gradient_steps = trial.suggest_categorical("gradient_steps", self.gradient_steps_choices)
 
         net_key = trial.suggest_categorical("net_key", list(self.net_arch.keys()))
         net_arch = self.net_arch[net_key]
@@ -218,11 +207,11 @@ class OptunaStudy:
                 learning_rate=learning_rate,
                 buffer_size=buffersize,
                 learning_starts=self.learning_starts,  # Start training sooner
-                batch_size=batch_size,
+                batch_size=cast(int, batch_size),
                 tau=tau,
                 gamma=gamma,  # Higher gamma for multi-step tasks
-                train_freq=self.train_freq_choices,
-                gradient_steps=self.gradient_steps_choices,  # Train on all available data
+                train_freq=cast(int, train_freq),
+                gradient_steps=cast(int, gradient_steps),
                 ent_coef=self.ent_coef,  # Automatic entropy tuning - crucial for SAC
                 target_entropy=self.target_entropy,  # Automatically set target entropy
                 use_sde=self.use_sde,  # State-dependent exploration (can be enabled for more exploration)
@@ -249,7 +238,6 @@ class OptunaStudy:
         try:
             model.learn(total_timesteps=self.total_timesteps, callback=callback, progress_bar=True)
         finally:
-            # VecEnvs sauber schließen, sonst hängen Prozesse
             train_env.close()
             eval_env.close()
 
@@ -265,7 +253,7 @@ class OptunaStudy:
         finally:
             final_eval_env.close()
 
-        return float(mean_reward)
+        return float(cast(float, mean_reward))
 
 
 

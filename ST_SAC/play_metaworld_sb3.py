@@ -37,7 +37,6 @@ if __name__ == "__main__":
     )
 
     # Load the trained model
-    # model_path = f"./metaworld_models/best_{TASK_NAME}_{ALGORITHM}/best_model.zip"
     model_path = f"./metaworld_models/best_pick-place-v3_{ALGORITHM}/best_model.zip"
 
 
@@ -90,7 +89,7 @@ if __name__ == "__main__":
             # Step environment
             obs, reward, done, truncated, info = env.step(action)
 
-            total_reward += reward
+            total_reward += float(reward)
             steps += 1
 
             # Check for success (Meta-World provides success info)

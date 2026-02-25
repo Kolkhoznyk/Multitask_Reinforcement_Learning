@@ -14,15 +14,10 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 """
 
 import os
-import warnings
-
 import gymnasium as gym
-import metaworld
-import numpy as np
 import torch
-from stable_baselines3 import TD3, DDPG, SAC, PPO
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback, StopTrainingOnRewardThreshold
+from stable_baselines3 import SAC
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
@@ -114,6 +109,7 @@ if __name__ == "__main__":
     eval_env = make_env(TASK_NAME, 0, SEED + 1000, MAX_EPISODE_STEPS, normalize_reward=False)()
 
     # Get action space dimensions
+    assert env.action_space.shape is not None, "Action space shape is None"
     n_actions = env.action_space.shape[0]
 
     # Initialize the RL algorithm
@@ -181,8 +177,6 @@ if __name__ == "__main__":
     print(f"  - Learning rate: {model.learning_rate}")
     print(f"  - Batch size: {model.batch_size}")
     print(f"  - Gamma: {model.gamma}")
-    #print(f"  - Learning starts: {model.learning_starts}")
-    #print(f"  - Buffer size: {model.buffer_size:,}")
     print(f"  - Network architecture: [256, 256, 256]")
     print(f"  - Gradient steps: -1 (train on all data)")
     print(f"  - Seed: {SEED}")
