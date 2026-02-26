@@ -27,6 +27,7 @@ from metaworld_envs.mt10_env import MetaWorldMT10Env
 from metaworld_envs.task_onehot_wrapper import TaskOneHotObsWrapper
 from callbacks.task_metrics import MT10TaskMetricsCallback
 from algos.sac_disentangled_alpha import SACDisentangledAlpha
+import metaworld  # registers Meta-World namespace with gymnasium
 
 
 def set_global_seeds(seed: int) -> None:
