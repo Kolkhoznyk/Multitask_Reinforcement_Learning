@@ -7,7 +7,7 @@ from MT3_SAC.train_metaworld_sb3_MT3_v2 import make_env
 
 class OptunaEvalCallback(BaseCallback):
     """
-    Evaluiert alle eval_freq steps, reported an Optuna und pruned ggf.
+    Evaluates all eval_freq steps, reported in Optuna and pruned if necessary.
     """
     def __init__(self, eval_env, trial: optuna.Trial, n_eval_episodes: int, eval_freq: int, deterministic: bool = True):
         super().__init__()
@@ -78,6 +78,13 @@ class MT10TaskMetricsCallback(BaseCallback):
         self._window_vecenv_steps = 0
 
     def _on_step(self) -> bool:
+        """
+        Called after each VecEnv step. Accumulates per-env episode returns and
+        success flags, flushes completed episodes into per-task history buffers,
+        and logs per-task mean reward, success rate, and task sampling fractions
+        to TensorBoard. Sampling distribution statistics are reported every
+        sample_window_steps VecEnv steps.
+        """
         infos = self.locals.get("infos", None)
         dones = self.locals.get("dones", None)
         rewards = self.locals.get("rewards", None)
@@ -189,6 +196,10 @@ class MT10TaskMetricsCallback(BaseCallback):
     
 
 class MultiTaskEvalCallback(BaseCallback):
+    """
+    Evaluates the current policy on every unique training task at a fixed frequency
+    and saves the best model based on the mean success rate across all tasks.
+    """
     def __init__(self, unique_tasks, n_eval_episodes=10, eval_freq=10000, save_path=None, seed=42, max_steps=500, terminate_on_success=True):
         super().__init__()
         self.unique_tasks = unique_tasks

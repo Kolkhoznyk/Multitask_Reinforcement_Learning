@@ -164,7 +164,7 @@ if __name__ == "__main__":
         )
 
     # ------------------------------------------------------
-    # Evaluation environment (immer DummyVecEnv)
+    # Evaluation environment (always DummyVecEnv)
     # ------------------------------------------------------
     print("Creating evaluation environment...")
     eval_env = DummyVecEnv(

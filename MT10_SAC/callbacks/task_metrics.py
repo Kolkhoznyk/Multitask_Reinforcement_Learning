@@ -43,6 +43,13 @@ class MT10TaskMetricsCallback(BaseCallback):
         self._window_vecenv_steps = 0
 
     def _on_step(self) -> bool:
+        """
+        Called after each VecEnv step. Accumulates per-env episode returns and
+        success flags, flushes completed episodes into per-task history buffers,
+        and logs per-task mean reward, success rate, and task sampling fractions
+        to TensorBoard. Sampling distribution statistics are reported every
+        sample_window_steps VecEnv steps.
+        """
         infos = self.locals.get("infos", None)
         dones = self.locals.get("dones", None)
         rewards = self.locals.get("rewards", None)

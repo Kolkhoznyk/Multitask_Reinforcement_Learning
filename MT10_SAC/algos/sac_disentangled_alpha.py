@@ -72,7 +72,16 @@ class SACDisentangledAlpha(SAC):
         return alpha.unsqueeze(1)
 
     def train(self, gradient_steps: int, batch_size: int = 64) -> None:
-        
+        """
+        Run gradient_steps SAC update iterations using per-task entropy coefficients.
+
+        Samples mini-batches from the replay buffer, then sequentially updates:
+          1. Per-task entropy coefficient (log_ent_coef_vec) via its own Adam optimizer.
+          2. Twin critic networks toward the Bellman target with task-specific alpha.
+          3. Actor network to maximize Q-value minus weighted entropy.
+          4. Target critic networks via Polyak averaging.
+        Logs actor loss, critic loss, mean entropy coefficient, and per-task alpha values.
+        """
         self.policy.set_training_mode(True)
         self._update_learning_rate([self.actor.optimizer, self.critic.optimizer, self.ent_coef_optimizer]) # type: ignore
 

@@ -7,6 +7,11 @@ import numpy as np
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
 
 class SingleTaskOneHotWrapper(gym.Wrapper):
+    """
+    Gym wrapper that appends a one-hot task encoding to every observation and
+    optionally scales the reward. Used to condition a shared policy on the
+    current task identity without modifying the underlying environment.
+    """
     def __init__(self, env, task_id, n_tasks, reward_scale=1.0):
         super().__init__(env)
         self.task_id = task_id
@@ -68,7 +73,7 @@ def evaluate_model_on_env(model, env, n_eval_episodes: int):
             done = terminated or truncated
             total_reward += float(reward)
 
-            # Single env => info ist dict
+            # Single env => info is a dict
             if isinstance(info, dict) and info.get("success", 0) == 1:
                 success = 1
 
@@ -99,7 +104,7 @@ def main():
     
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
 
-    # --- 1) Eval-Envs EINMAL erstellen ---
+    # --- 1) Create eval environments once ---
     eval_envs = []
     n_tasks = len(TASK_NAMES)
     for i, task_name in enumerate(TASK_NAMES):
@@ -109,7 +114,7 @@ def main():
             seed=SEED,
             reward_function_version="v3",
             max_episode_steps=MAX_EPISODE_STEPS,
-            terminate_on_success=True,   # für Success-Rate sinnvoll
+            terminate_on_success=True,   # recommended for accurate success rate evaluation
         )
         env = SingleTaskOneHotWrapper(env=env, task_id=i, n_tasks=n_tasks, reward_scale=REWARD_SCALES[i])
         eval_envs.append(env)
