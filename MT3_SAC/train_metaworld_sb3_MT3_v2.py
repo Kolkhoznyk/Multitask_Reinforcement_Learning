@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import gymnasium as gym
 import numpy as np
 import torch
@@ -8,10 +10,10 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
 from get_data_from_checkpoints import SingleTaskOneHotWrapper
-
-
+import metaworld  # registers Meta-World namespace with gymnasium in each subprocess
+       
 def make_env(task_name, task_id, n_tasks, rew_scale, rank, seed, max_steps, terminate_on_success=False):
-    def _init():
+    def _init():      
         env = gym.make(
             'Meta-World/MT1',
             env_name=task_name,
