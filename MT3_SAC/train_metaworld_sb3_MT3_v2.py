@@ -6,7 +6,7 @@ from stable_baselines3 import SAC, PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from algos.sac_disentangled_alpha import SACDisentangledAlpha
+from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
 from get_data_from_checkpoints import SingleTaskOneHotWrapper
 
 
