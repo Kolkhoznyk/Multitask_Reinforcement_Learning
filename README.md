@@ -41,7 +41,7 @@ python MT10_SAC/play_metaworld_sb3.py
 
 **3. Hyperparameter search (single-task only)**
 
-Define the search space in `ST_SAC/optuna_study.py`, then launch the study:
+Define the search space in `ST_SAC/start_study.py` under params, then launch the study:
 
 ```bash
 python ST_SAC/start_study.py
