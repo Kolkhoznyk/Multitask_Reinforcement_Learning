@@ -3,6 +3,8 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 
+from MT3_SAC.train_metaworld_sb3_MT3_v2 import make_env
+
 class OptunaEvalCallback(BaseCallback):
     """
     Evaluiert alle eval_freq steps, reported an Optuna und pruned ggf.
@@ -26,7 +28,7 @@ class OptunaEvalCallback(BaseCallback):
                 return_episode_rewards=False,
             )
             # report an Optuna
-            self.trial.report(mean_reward, step=self.n_calls)
+            self.trial.report(float(np.mean(mean_reward)), step=self.n_calls)
 
             # # prune?
             # if self.trial.should_prune():
@@ -85,34 +87,34 @@ class MT10TaskMetricsCallback(BaseCallback):
 
         # accumulate per env
         for env_idx, (info, done, r) in enumerate(zip(infos, dones, rewards)):
-            self._ep_rew[env_idx] += float(r)
+            self._ep_rew[env_idx] += float(r) # type: ignore
 
             tid = info.get("mt_task_id", None)
             if tid is not None:
-                self._last_task_id[env_idx] = int(tid)
+                self._last_task_id[env_idx] = int(tid) # type: ignore
 
             if "success" in info:
                 if float(info["success"]) >= 1.0:
-                    self._ep_success_any[env_idx] = True
+                    self._ep_success_any[env_idx] = True # type: ignore
 
             if done:
-                task_id = int(self._last_task_id[env_idx])
+                task_id = int(self._last_task_id[env_idx]) # type: ignore
                 if 0 <= task_id < self.num_tasks:
                     # store episode return
-                    self._task_returns[task_id].append(float(self._ep_rew[env_idx]))
+                    self._task_returns[task_id].append(float(self._ep_rew[env_idx])) # type: ignore
                     if len(self._task_returns[task_id]) > self.max_hist:
                         self._task_returns[task_id] = self._task_returns[task_id][-self.max_hist:]
 
                     # store episode success if available
                     if "success" in info:
-                        self._task_success[task_id].append(float(self._ep_success_any[env_idx]))
+                        self._task_success[task_id].append(float(self._ep_success_any[env_idx])) # type: ignore
                         if len(self._task_success[task_id]) > self.max_hist:
                             self._task_success[task_id] = self._task_success[task_id][-self.max_hist:]
 
                 # reset env accumulators
-                self._ep_rew[env_idx] = 0.0
-                self._ep_success_any[env_idx] = False
-                self._last_task_id[env_idx] = -1
+                self._ep_rew[env_idx] = 0.0 # type: ignore
+                self._ep_success_any[env_idx] = False # type: ignore
+                self._last_task_id[env_idx] = -1 # type: ignore
 
         # Sampling stats
         # One VecEnv step contains n_envs transitions
@@ -120,30 +122,30 @@ class MT10TaskMetricsCallback(BaseCallback):
         self._window_vecenv_steps += 1
 
         for env_idx, (info, done, r) in enumerate(zip(infos, dones, rewards)):
-            self._ep_rew[env_idx] += float(r)
+            self._ep_rew[env_idx] += float(r) # type: ignore
 
             task_id = info.get("mt_task_id", None)
             if task_id is not None:
                 tid = int(task_id)
-                self._last_task_id[env_idx] = tid
+                self._last_task_id[env_idx] = tid # type: ignore
 
                 # Count this transition towards sampling distribution
                 if 0 <= tid < self.num_tasks:
-                    self._sample_counts[tid] += 1
+                    self._sample_counts[tid] += 1 # type: ignore
                     self._sample_total += 1
 
             if "success" in info:
-                self._ep_success_any[env_idx] = self._ep_success_any[env_idx] or (float(info["success"]) >= 1.0)
+                self._ep_success_any[env_idx] = self._ep_success_any[env_idx] or (float(info["success"]) >= 1.0) # type: ignore
 
             if done:
-                tid = int(self._last_task_id[env_idx])
+                tid = int(self._last_task_id[env_idx]) # type: ignore
                 if 0 <= tid < self.num_tasks:
-                    self._task_returns[tid].append(float(self._ep_rew[env_idx]))
+                    self._task_returns[tid].append(float(self._ep_rew[env_idx])) # type: ignore
                     if "success" in info:
-                        self._task_success[tid].append(float(self._ep_success_any[env_idx]))
+                        self._task_success[tid].append(float(self._ep_success_any[env_idx])) # type: ignore
 
-                self._ep_rew[env_idx] = 0.0
-                self._ep_success_any[env_idx] = False
+                self._ep_rew[env_idx] = 0.0 # type: ignore
+                self._ep_success_any[env_idx] = False # type: ignore
 
         # log per-task means + mean across tasks (only tasks with data)
         task_reward_means = []
@@ -168,7 +170,7 @@ class MT10TaskMetricsCallback(BaseCallback):
 
     # Log sampling fractions every window steps
         # sample_window_steps counts VecEnv-steps, not transitions
-        if self._window_vecenv_steps >= self.sample_window_steps and self._sample_total > 0:
+        if self._window_vecenv_steps >= self.sample_window_steps and self._sample_total > 0 and self._sample_counts is not None:
             fracs = self._sample_counts.astype(np.float64) / float(self._sample_total)
             for k in range(self.num_tasks):
                 self.logger.record(f"task/sample_frac_task_{k}", float(fracs[k]))
@@ -179,7 +181,7 @@ class MT10TaskMetricsCallback(BaseCallback):
             self.logger.record("task/sample_frac_mean_abs_dev", mad)
 
             # reset window
-            self._sample_counts[:] = 0
+            self._sample_counts[:] = 0 # type: ignore
             self._sample_total = 0
             self._window_vecenv_steps = 0
 
@@ -225,7 +227,7 @@ class MultiTaskEvalCallback(BaseCallback):
                         length += 1
                         
                         if isinstance(info, list):
-                            if info[0].get('success', 0) == 1:
+                            if info[0].get('success', 0) == 1: # type: ignore
                                 success = 1
                         else:
                             if info.get('success', 0) == 1:

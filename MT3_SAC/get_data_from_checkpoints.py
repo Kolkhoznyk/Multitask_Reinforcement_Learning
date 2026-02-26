@@ -2,12 +2,8 @@ import os
 import re
 import csv
 from typing import Optional, List
-
 import gymnasium as gym
-import metaworld
 import numpy as np
-from stable_baselines3 import SAC
-
 from algos.sac_disentangled_alpha import SACDisentangledAlpha
 
 class SingleTaskOneHotWrapper(gym.Wrapper):
@@ -19,8 +15,8 @@ class SingleTaskOneHotWrapper(gym.Wrapper):
 
         obs_space = self.env.observation_space
         self.observation_space = gym.spaces.Box(
-            low=np.concatenate([obs_space.low, np.zeros(self.n_tasks)]),
-            high=np.concatenate([obs_space.high, np.ones(self.n_tasks)]),
+            low=np.concatenate([obs_space.low, np.zeros(self.n_tasks)]), # type: ignore
+            high=np.concatenate([obs_space.high, np.ones(self.n_tasks)]), # type: ignore
             dtype=np.float32
         )
 
@@ -30,7 +26,7 @@ class SingleTaskOneHotWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
-        return self._one_hot_obs(obs), reward * self.reward_scale, terminated, truncated, info
+        return self._one_hot_obs(obs), reward * self.reward_scale, terminated, truncated, info # type: ignore
 
     def _one_hot_obs(self, obs):
         one_hot = np.zeros(self.n_tasks, dtype=np.float32)

@@ -1,43 +1,14 @@
 import os
-
 import gymnasium as gym
-import metaworld
 import numpy as np
 import torch
 from stable_baselines3 import SAC, PPO
-from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
-
 from algos.sac_disentangled_alpha import SACDisentangledAlpha
+from get_data_from_checkpoints import SingleTaskOneHotWrapper
 
-class SingleTaskOneHotWrapper(gym.Wrapper):
-    def __init__(self, env, task_id, n_tasks, reward_scale=1.0):
-        super().__init__(env)
-        self.task_id = task_id
-        self.n_tasks = n_tasks
-        self.reward_scale = reward_scale
-
-        obs_space = self.env.observation_space
-        self.observation_space = gym.spaces.Box(
-            low=np.concatenate([obs_space.low, np.zeros(self.n_tasks)]),
-            high=np.concatenate([obs_space.high, np.ones(self.n_tasks)]),
-            dtype=np.float32
-        )
-
-    def reset(self, **kwargs):
-        obs, info = self.env.reset(**kwargs)
-        return self._one_hot_obs(obs), info
-
-    def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
-        return self._one_hot_obs(obs), reward * self.reward_scale, terminated, truncated, info
-
-    def _one_hot_obs(self, obs):
-        one_hot = np.zeros(self.n_tasks, dtype=np.float32)
-        one_hot[self.task_id] = 1.0
-        return np.concatenate([np.array(obs, dtype=np.float32), one_hot])
 
 def make_env(task_name, task_id, n_tasks, rew_scale, rank, seed, max_steps, terminate_on_success=False):
     def _init():
@@ -66,7 +37,7 @@ class MultiTaskEvalCallback(BaseCallback):
         self.max_steps = max_steps
         self.terminate_on_success = terminate_on_success
 
-        self.eval_envs = None
+        self.eval_envs: list = []
 
     def _on_training_start(self):
         print("!Create Evaluation Environments!")
@@ -183,7 +154,7 @@ if __name__ == "__main__":
         make_env(name, UNIQUE_TASKS.index(name), len(UNIQUE_TASKS), REWARD_SCALES[name], i, SEED, MAX_EPISODE_STEPS, terminate_on_success=False)
         for i, name in enumerate(TRAINING_TASKS)
     ]
-    env = SubprocVecEnv(env_fns, start_method='spawn')
+    env = SubprocVecEnv(env_fns, start_method='spawn') # type: ignore
 
     if ALGORITHM == "SAC":
         model = SAC(
