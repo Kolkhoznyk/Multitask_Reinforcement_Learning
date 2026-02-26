@@ -14,12 +14,34 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 """
 
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import yaml
 import gymnasium as gym
+import metaworld  # registers Meta-World namespace with gymnasium
 import torch
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
+
+_ACTIVATION_FNS = {
+    "ReLU": torch.nn.ReLU,
+    "Tanh": torch.nn.Tanh,
+    "ELU": torch.nn.ELU,
+}
+
+def load_config(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
+    kwargs = dict(policy_kwargs)
+    if "activation_fn" in kwargs:
+        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
+    if "net_arch" in kwargs:
+        kwargs["net_arch"] = list(kwargs["net_arch"])
+    return kwargs
 
 
 
@@ -61,32 +83,27 @@ def make_env(task_name='reach-v3', rank=0, seed=0, max_episode_steps=500, normal
 
 
 if __name__ == "__main__":
-    # ==================== CONFIGURATION ====================
-    # Task Selection
-    TASK_NAME = "pick-place-v3"  # MT1 tasks: "reach-v3", "push-v3", "pick-place-v3", etc.
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg = load_config(os.path.join(_script_dir, "config_ST.yaml"))
 
-    # Algorithm Selection
-    ALGORITHM = "SAC"  # "SAC" or "PPO"
+    exp               = cfg["experiment"]
+    TASK_NAME         = exp["task_name"]
+    ALGORITHM         = exp["algorithm"]
+    SEED              = exp["seed"]
+    TOTAL_TIMESTEPS   = exp["total_timesteps"]
+    MAX_EPISODE_STEPS = exp["max_episode_steps"]
+    NORMALIZE_REWARD  = exp["normalize_reward"]
+    USE_PARALLEL      = exp["use_parallel"]
+    N_ENVS            = exp["n_envs"] if USE_PARALLEL else 1
 
-    # Environment Settings
-    USE_PARALLEL = False  # Set to False for single environment
-    N_ENVS = 1 if USE_PARALLEL else 1
-    SEED = 42
-
-    # Training Settings
-    TOTAL_TIMESTEPS = 1_200_000  # Increased for better convergence
-    MAX_EPISODE_STEPS = 150  # Maximum steps per episode
-    NORMALIZE_REWARD = False  # Set to True if experiencing training instability
-
-    # Evaluation Settings
-    EVAL_FREQ = 15_000  # Evaluate every N steps
-    N_EVAL_EPISODES = 20  # Number of episodes for evaluation
-    CHECKPOINT_FREQ = 20_000  # Save checkpoint every N steps
-    # ======================================================
+    EVAL_FREQ       = cfg["eval"]["freq"]
+    N_EVAL_EPISODES = cfg["eval"]["n_episodes"]
+    CHECKPOINT_FREQ = cfg["checkpoint"]["freq"]
+    paths           = cfg["paths"]
 
     # Create output directories
-    os.makedirs("./metaworld_models", exist_ok=True)
-    os.makedirs("./metaworld_logs", exist_ok=True)
+    os.makedirs(paths["models"], exist_ok=True)
+    os.makedirs(paths["logs"], exist_ok=True)
 
     print(f"=" * 60)
     print(f"Meta-World MT1 Training: {TASK_NAME}")
@@ -116,27 +133,23 @@ if __name__ == "__main__":
     print(f"\nInitializing {ALGORITHM} agent...")
 
     if ALGORITHM == "SAC":
-        # SAC - Recommended for Meta-World (better exploration)
+        sac_cfg = cfg["sac"]
         model = SAC(
             policy="MlpPolicy",
             env=env,
-            learning_rate=2.5e-4,
-            buffer_size=300_000,
-            learning_starts=10_000,  # Start training sooner
-            batch_size=256,
-            tau=0.0042,
-            gamma=0.95,  # Higher gamma for multi-step tasks
-            train_freq=1,
-            gradient_steps=1,  # Train on all available data
-            ent_coef='auto',  # Automatic entropy tuning - crucial for SAC
-            target_entropy='auto',  # Automatically set target entropy
-            use_sde=False,  # State-dependent exploration (can be enabled for more exploration)
-            policy_kwargs=dict(
-                net_arch=[256, 256, 256],  # Deeper network
-                activation_fn=torch.nn.ReLU,
-                log_std_init=-3,  # Initial exploration level
-            ),
-            tensorboard_log=f"./metaworld_logs/{TASK_NAME}/",
+            learning_rate=sac_cfg["learning_rate"],
+            buffer_size=sac_cfg["buffer_size"],
+            learning_starts=sac_cfg["learning_starts"],
+            batch_size=sac_cfg["batch_size"],
+            tau=sac_cfg["tau"],
+            gamma=sac_cfg["gamma"],
+            train_freq=sac_cfg["train_freq"],
+            gradient_steps=sac_cfg["gradient_steps"],
+            ent_coef=sac_cfg["ent_coef"],
+            target_entropy=sac_cfg["target_entropy"],
+            use_sde=sac_cfg["use_sde"],
+            policy_kwargs=resolve_policy_kwargs(sac_cfg["policy_kwargs"]),
+            tensorboard_log=f"{paths['logs']}/{TASK_NAME}/",
             verbose=1,
             device="auto",
             seed=SEED,
@@ -145,21 +158,19 @@ if __name__ == "__main__":
         raise ValueError(f"Unknown algorithm: {ALGORITHM}")
 
     # Callbacks
-    # Save checkpoint every CHECKPOINT_FREQ steps
     checkpoint_callback = CheckpointCallback(
         save_freq=CHECKPOINT_FREQ,
-        save_path=f"./metaworld_models/checkpoints_{TASK_NAME}/",
+        save_path=f"{paths['models']}/checkpoints_{TASK_NAME}/",
         name_prefix=f"{ALGORITHM.lower()}_{TASK_NAME}",
         verbose=1
     )
 
-    # Evaluate every EVAL_FREQ steps
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path=f"./metaworld_models/best_{TASK_NAME}_{ALGORITHM}/",
-        log_path=f"./metaworld_logs/eval_{TASK_NAME}/",
+        best_model_save_path=f"{paths['models']}/best_{TASK_NAME}_{ALGORITHM}/",
+        log_path=f"{paths['logs']}/eval_{TASK_NAME}/",
         eval_freq=EVAL_FREQ,
-        n_eval_episodes=N_EVAL_EPISODES,  # More episodes for robust evaluation
+        n_eval_episodes=N_EVAL_EPISODES,
         deterministic=True,
         render=False,
         verbose=1,
@@ -206,14 +217,14 @@ if __name__ == "__main__":
 
     # Save the final model
     print("\nSaving final model...")
-    model.save(f"./metaworld_models/{ALGORITHM.lower()}_{TASK_NAME}_final")
+    model.save(f"{paths['models']}/{ALGORITHM.lower()}_{TASK_NAME}_final")
 
     print("\n" + "=" * 60)
     print("Training complete!")
-    print(f"Final model saved to: ./metaworld_models/{ALGORITHM.lower()}_{TASK_NAME}_final.zip")
-    print(f"Best model saved to: ./metaworld_models/best_{TASK_NAME}/best_model.zip")
-    print(f"Checkpoints saved to: ./metaworld_models/checkpoints_{TASK_NAME}/")
-    print(f"\nTo monitor training, run: tensorboard --logdir=./metaworld_logs/")
+    print(f"Final model saved to: {paths['models']}/{ALGORITHM.lower()}_{TASK_NAME}_final.zip")
+    print(f"Best model saved to: {paths['models']}/best_{TASK_NAME}_{ALGORITHM}/best_model.zip")
+    print(f"Checkpoints saved to: {paths['models']}/checkpoints_{TASK_NAME}/")
+    print(f"\nTo monitor training, run: tensorboard --logdir={paths['logs']}/")
     print("=" * 60)
 
     # Cleanup

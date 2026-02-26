@@ -1,0 +1,43 @@
+experiment:
+  task_name: pick-place-v3   # reach-v3, push-v3, pick-place-v3, etc.
+  algorithm: SAC
+  seed: 42
+  total_timesteps: 1200000
+  max_episode_steps: 150
+  normalize_reward: false
+  use_parallel: false
+  n_envs: 1
+
+eval:
+  freq: 15000
+  n_episodes: 20
+
+checkpoint:
+  freq: 20000
+
+paths:
+  models: ./metaworld_models
+  logs: ./metaworld_logs
+
+play:
+  algorithm: SAC    # algorithm class used to load the model (SAC, PPO, DDPG, TD3)
+  seed: 40
+  num_episodes: 20
+  render_mode: human
+
+sac:
+  learning_rate: 0.00025
+  buffer_size: 300000
+  learning_starts: 10000
+  batch_size: 256
+  tau: 0.0042
+  gamma: 0.95
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: auto
+  target_entropy: auto
+  use_sde: false
+  policy_kwargs:
+    net_arch: [256, 256, 256]
+    activation_fn: ReLU
+    log_std_init: -3

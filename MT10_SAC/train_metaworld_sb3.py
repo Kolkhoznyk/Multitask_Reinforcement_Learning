@@ -14,7 +14,10 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 """
 
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import random
+import yaml
 
 import numpy as np
 import torch
@@ -28,6 +31,24 @@ from metaworld_envs.task_onehot_wrapper import TaskOneHotObsWrapper
 from callbacks.task_metrics import MT10TaskMetricsCallback
 from algos.sac_disentangled_alpha import SACDisentangledAlpha
 import metaworld  # registers Meta-World namespace with gymnasium
+
+_ACTIVATION_FNS = {
+    "ReLU": torch.nn.ReLU,
+    "Tanh": torch.nn.Tanh,
+    "ELU": torch.nn.ELU,
+}
+
+def load_config(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
+    kwargs = dict(policy_kwargs)
+    if "activation_fn" in kwargs:
+        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
+    if "net_arch" in kwargs:
+        kwargs["net_arch"] = list(kwargs["net_arch"])
+    return kwargs
 
 
 def set_global_seeds(seed: int) -> None:
@@ -61,41 +82,35 @@ def make_env_mt10(rank=0, seed=0, max_episode_steps=500, normalize_reward=False)
 
 if __name__ == "__main__":
 
-    # ==================== CONFIGURATION ====================
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg = load_config(os.path.join(_script_dir, "config_MT10.yaml"))
 
-    # Algorithm Selection
-    ALGORITHM = "SAC"
+    exp = cfg["experiment"]
+    SAC_DISENTANGLED_ALPHA = exp["sac_disentangled_alpha"]
+    USE_PARALLEL           = exp["use_parallel"]
+    N_ENVS                 = exp["n_envs"] if USE_PARALLEL else 1
+    SEED                   = exp["seed"]
+    TOTAL_TIMESTEPS        = exp["total_timesteps"]
+    MAX_EPISODE_STEPS      = exp["max_episode_steps"]
+    NORMALIZE_REWARD       = exp["normalize_reward"]
+    NUM_TASKS              = exp["num_tasks"]
 
-    # Toggle disentangled alpha
-    SAC_DISENTANGLED_ALPHA = False   # False = baseline
+    EVAL_FREQ       = cfg["eval"]["freq"]
+    N_EVAL_EPISODES = cfg["eval"]["n_episodes"]
+    CHECKPOINT_FREQ = cfg["checkpoint"]["freq"]
+    paths           = cfg["paths"]
 
     # Run naming (IMPORTANT for plotting & grouping)
     RUN_GROUP = "disent_alpha" if SAC_DISENTANGLED_ALPHA else "baseline"
     RUN_NAME  = f"MT10_SAC_{RUN_GROUP}"
-
-    # Environment settings
-    USE_PARALLEL = True
-    N_ENVS = 10 if USE_PARALLEL else 1
-    SEED = 42
-
-    # Training settings
-    TOTAL_TIMESTEPS = 5_000_000        # increase later
-    MAX_EPISODE_STEPS = 500
-    NORMALIZE_REWARD = False
-
-    # Evaluation / checkpointing
-    EVAL_FREQ = 10_000
-    N_EVAL_EPISODES = 20
-    CHECKPOINT_FREQ = 25_000
-
-    # ======================================================
+    ALGORITHM = "SAC"
 
     # Reproducibility
     set_global_seeds(SEED)
 
     # Create base output directories
-    os.makedirs("./metaworld_models", exist_ok=True)
-    os.makedirs("./metaworld_logs", exist_ok=True)
+    os.makedirs(paths["models"], exist_ok=True)
+    os.makedirs(paths["logs"], exist_ok=True)
 
     print("=" * 60)
     print(f"Meta-World MT10 Training")
@@ -170,30 +185,26 @@ if __name__ == "__main__":
     print("\nAugmented obs shape:", obs.shape) # type: ignore
     print("Single obs dim:", env.observation_space.shape)
 
-    num_tasks = 10
-    onehot = obs[:, -num_tasks:] # type: ignore
+    onehot = obs[:, -NUM_TASKS:] # type: ignore
     assert np.allclose(onehot.sum(axis=1), 1.0), "Invalid one-hot task encoding!"
 
     # ------------------------------------------------------
     # Common SAC hyperparameters
     # ------------------------------------------------------
+    sac_cfg = cfg["sac"]
     COMMON_SAC_ARGS = dict(
-        learning_rate=3e-4,
-        gamma=0.99,
-        tau=5e-3,
-        buffer_size=2_000_000,
-        learning_starts=1500,
-        batch_size=512,
-        train_freq=1,
-        gradient_steps=1,
-        ent_coef="auto",
-        target_entropy="auto",
-        use_sde=False,
-        policy_kwargs=dict(
-            net_arch=[256, 256, 256],
-            activation_fn=torch.nn.ReLU,
-            log_std_init=0.0,
-        ),
+        learning_rate=sac_cfg["learning_rate"],
+        gamma=sac_cfg["gamma"],
+        tau=sac_cfg["tau"],
+        buffer_size=sac_cfg["buffer_size"],
+        learning_starts=sac_cfg["learning_starts"],
+        batch_size=sac_cfg["batch_size"],
+        train_freq=sac_cfg["train_freq"],
+        gradient_steps=sac_cfg["gradient_steps"],
+        ent_coef=sac_cfg["ent_coef"],
+        target_entropy=sac_cfg["target_entropy"],
+        use_sde=sac_cfg["use_sde"],
+        policy_kwargs=resolve_policy_kwargs(sac_cfg["policy_kwargs"]),
         verbose=1,
         device="auto",
         seed=SEED,
@@ -204,40 +215,38 @@ if __name__ == "__main__":
     # ------------------------------------------------------
     print("\nInitializing SAC agent...")
 
-    TENSORBOARD_LOGDIR = f"./metaworld_logs/{RUN_GROUP}/"
-
     if SAC_DISENTANGLED_ALPHA:
         model = SACDisentangledAlpha(
             "MlpPolicy",
             env,
-            num_tasks=10,
-            tensorboard_log="./metaworld_logs/disent_alpha",
+            num_tasks=NUM_TASKS,
+            tensorboard_log=f"{paths['logs']}/disent_alpha",
             **COMMON_SAC_ARGS,
         )
     else:
         model = SAC(
             "MlpPolicy",
             env,
-            tensorboard_log="./metaworld_logs/baseline",
+            tensorboard_log=f"{paths['logs']}/baseline",
             **COMMON_SAC_ARGS, # type: ignore
         )
 
     # ------------------------------------------------------
     # Callbacks
     # ------------------------------------------------------
-    task_metrics_cb = MT10TaskMetricsCallback(num_tasks=10, verbose=0)
+    task_metrics_cb = MT10TaskMetricsCallback(num_tasks=NUM_TASKS, verbose=0)
 
     checkpoint_callback = CheckpointCallback(
         save_freq=CHECKPOINT_FREQ,
-        save_path=f"./metaworld_models/checkpoints_{RUN_NAME}/",
+        save_path=f"{paths['models']}/checkpoints_{RUN_NAME}/",
         name_prefix=f"sac_{RUN_NAME}",
         verbose=1,
     )
 
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path=f"./metaworld_models/best_{RUN_NAME}/",
-        log_path=f"./metaworld_logs/{RUN_GROUP}/eval_seed{SEED}/",
+        best_model_save_path=f"{paths['models']}/best_{RUN_NAME}/",
+        log_path=f"{paths['logs']}/{RUN_GROUP}/eval_seed{SEED}/",
         eval_freq=EVAL_FREQ,
         n_eval_episodes=N_EVAL_EPISODES,
         deterministic=True,
@@ -264,11 +273,11 @@ if __name__ == "__main__":
     # Save final model
     # ------------------------------------------------------
     print("\nSaving final model...")
-    model.save(f"./metaworld_models/sac_{RUN_NAME}_final")
+    model.save(f"{paths['models']}/sac_{RUN_NAME}_final")
 
     print("\nTraining complete.")
-    print(f"Logs saved to:      ./metaworld_logs/{RUN_GROUP}/")
-    print(f"Models saved to:    ./metaworld_models/")
+    print(f"Logs saved to:      {paths['logs']}/{RUN_GROUP}/")
+    print(f"Models saved to:    {paths['models']}/")
     print("=" * 60)
 
     env.close()

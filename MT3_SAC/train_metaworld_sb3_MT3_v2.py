@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import yaml
 import gymnasium as gym
 import numpy as np
 import torch
@@ -11,6 +12,24 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
 from get_data_from_checkpoints import SingleTaskOneHotWrapper
 import metaworld  # registers Meta-World namespace with gymnasium in each subprocess
+
+_ACTIVATION_FNS = {
+    "ReLU": torch.nn.ReLU,
+    "Tanh": torch.nn.Tanh,
+    "ELU": torch.nn.ELU,
+}
+
+def load_config(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
+    kwargs = dict(policy_kwargs)
+    if "activation_fn" in kwargs:
+        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
+    if "net_arch" in kwargs:
+        kwargs["net_arch"] = list(kwargs["net_arch"])
+    return kwargs
        
 def make_env(task_name, task_id, n_tasks, rew_scale, rank, seed, max_steps, terminate_on_success=False):
     def _init():      
@@ -130,26 +149,30 @@ class MultiTaskEvalCallback(BaseCallback):
         return True
 
 if __name__ == "__main__":
-    TRAINING_TASKS = (
-        ["reach-v3"] + 
-        ["push-v3"] + 
-        ["pick-place-v3"]*6
-    )
-    print(TRAINING_TASKS)
-    
-    UNIQUE_TASKS = list(dict.fromkeys(TRAINING_TASKS))
-    REWARD_SCALES = {"reach-v3": 0.5, "push-v3": 1.0, "pick-place-v3": 1.0}
-    
-    ALGORITHM = "SAC_DA"  # SAC or PPO
-    SEED = 42
-    TOTAL_TIMESTEPS = 9_600_000
-    MAX_EPISODE_STEPS = 150
-    EVAL_FREQ = 80_000
-    N_EVAL_EPISODES = 20
-    CHECKPOINT_FREQ = 10_000 # Attention value equals grad steps freq!!! *len(TRAINING_TASKS) equals timestep freq!
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg = load_config(os.path.join(_script_dir, "config_MT3.yaml"))
 
-    os.makedirs("./metaworld_models", exist_ok=True)
-    os.makedirs("./metaworld_logs", exist_ok=True)
+    TRAINING_TASKS = cfg["tasks"]["training"]
+    REWARD_SCALES  = cfg["tasks"]["reward_scales"]
+    UNIQUE_TASKS   = list(dict.fromkeys(TRAINING_TASKS))
+
+    exp             = cfg["experiment"]
+    ALGORITHM       = exp["algorithm"]
+    SEED            = exp["seed"]
+    TOTAL_TIMESTEPS = exp["total_timesteps"]
+    MAX_EPISODE_STEPS = exp["max_episode_steps"]
+
+    EVAL_FREQ       = cfg["eval"]["freq"]
+    N_EVAL_EPISODES = cfg["eval"]["n_episodes"]
+    EVAL_TERMINATE  = cfg["eval"]["terminate_on_success"]
+    CHECKPOINT_FREQ = cfg["checkpoint"]["freq"]
+
+    paths = cfg["paths"]
+
+    print(TRAINING_TASKS)
+
+    os.makedirs(paths["models"], exist_ok=True)
+    os.makedirs(paths["logs"], exist_ok=True)
 
     print(f"Creating {len(TRAINING_TASKS)} parallel environments...")
     env_fns = [
@@ -158,85 +181,59 @@ if __name__ == "__main__":
     ]
     env = SubprocVecEnv(env_fns, start_method='spawn') # type: ignore
 
-    if ALGORITHM == "SAC":
-        model = SAC(
-            policy="MlpPolicy",
+    if ALGORITHM in ("SAC", "SAC_DA"):
+        sac_cfg = cfg["sac"]
+        policy_kwargs = resolve_policy_kwargs(sac_cfg["policy_kwargs"])
+        sac_params = dict(
+            policy=sac_cfg["policy"],
             env=env,
-            learning_rate=0.0002524548054563359,
-            buffer_size=300000,
-            learning_starts=10000,  # Start training sooner
-            batch_size=256,
-            tau=0.004187861038711214,
-            gamma=0.9493925038998,  # Higher gamma for multi-step tasks
-            train_freq=1,
-            gradient_steps=1,  # Train on all available data
-            ent_coef='auto',  # Automatic entropy tuning - crucial for SAC
-            target_entropy='auto',  # Automatically set target entropy
-            use_sde=False,  # State-dependent exploration (can be enabled for more exploration)
-            policy_kwargs=dict(
-                net_arch=[256, 256, 256],  # Deeper network
-                activation_fn=torch.nn.ReLU,
-                log_std_init=-3,  # Initial exploration level
-            ),
-            tensorboard_log=f"./metaworld_logs/{ALGORITHM}/",
+            learning_rate=sac_cfg["learning_rate"],
+            buffer_size=sac_cfg["buffer_size"],
+            learning_starts=sac_cfg["learning_starts"],
+            batch_size=sac_cfg["batch_size"],
+            tau=sac_cfg["tau"],
+            gamma=sac_cfg["gamma"],
+            train_freq=sac_cfg["train_freq"],
+            gradient_steps=sac_cfg["gradient_steps"],
+            ent_coef=sac_cfg["ent_coef"],
+            target_entropy=sac_cfg["target_entropy"],
+            use_sde=sac_cfg["use_sde"],
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=f"{paths['logs']}/{ALGORITHM}/",
             verbose=1,
             device="auto",
             seed=SEED,
         )
-    elif ALGORITHM == "SAC_DA":
-        model = SACDisentangledAlpha(
-            policy="MlpPolicy",
-            env=env,
-            num_tasks=len(UNIQUE_TASKS),
-            learning_rate=0.0002524548054563359,
-            buffer_size=300000,
-            learning_starts=10000,  # Start training sooner
-            batch_size=256,
-            tau=0.004187861038711214,
-            gamma=0.9493925038998,  # Higher gamma for multi-step tasks
-            train_freq=1,
-            gradient_steps=1,  # Train on all available data
-            ent_coef='auto',  # Automatic entropy tuning - crucial for SAC
-            target_entropy='auto',  # Automatically set target entropy
-            use_sde=False,  # State-dependent exploration (can be enabled for more exploration)
-            policy_kwargs=dict(
-                net_arch=[256, 256, 256],  # Deeper network
-                activation_fn=torch.nn.ReLU,
-                log_std_init=-3,  # Initial exploration level
-            ),
-            tensorboard_log=f"./metaworld_logs/{ALGORITHM}/",
-            verbose=1,
-            device="auto",
-            seed=SEED,
-        )
+        if ALGORITHM == "SAC":
+            model = SAC(**sac_params)  # type: ignore[arg-type]
+        else:
+            model = SACDisentangledAlpha(num_tasks=len(UNIQUE_TASKS), **sac_params)  # type: ignore[arg-type]
 
     elif ALGORITHM == "PPO":
-        # PPO
+        ppo_cfg = cfg["ppo"]
+        policy_kwargs = resolve_policy_kwargs(ppo_cfg["policy_kwargs"])
         model = PPO(
-            policy="MlpPolicy",
+            policy=ppo_cfg["policy"],
             env=env,
-            learning_rate=3e-4,
-            batch_size=256,
-            gamma=0.99,  # Higher gamma for multi-step tasks
-            gae_lambda = 0.95,
-            clip_range=0.2,
-            ent_coef=0.0,
-            vf_coef=0.5,
-            policy_kwargs=dict(
-                net_arch=[256, 256, 256],  # Deeper network
-                activation_fn=torch.nn.ReLU,
-            ),
-            tensorboard_log=f"./metaworld_logs/{ALGORITHM}/",
+            learning_rate=ppo_cfg["learning_rate"],
+            batch_size=ppo_cfg["batch_size"],
+            gamma=ppo_cfg["gamma"],
+            gae_lambda=ppo_cfg["gae_lambda"],
+            clip_range=ppo_cfg["clip_range"],
+            ent_coef=ppo_cfg["ent_coef"],
+            vf_coef=ppo_cfg["vf_coef"],
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=f"{paths['logs']}/{ALGORITHM}/",
             verbose=1,
             device="auto",
             seed=SEED,
         )
     else:
         raise ValueError(f"Unknown algorithm: {ALGORITHM}")
-    
+
     checkpoint_callback = CheckpointCallback(
         save_freq=CHECKPOINT_FREQ,
-        save_path=f"./metaworld_models/checkpoints_MT3/",
+        save_path=paths["checkpoints"],
         name_prefix=f"{ALGORITHM.lower()}_MT3",
         verbose=1
     )
@@ -245,27 +242,27 @@ if __name__ == "__main__":
         UNIQUE_TASKS,
         n_eval_episodes=N_EVAL_EPISODES,
         eval_freq=EVAL_FREQ,
-        save_path=f"./metaworld_models/best_MT3_model.zip",
+        save_path=paths["best_model"],
         seed=SEED,
         max_steps=MAX_EPISODE_STEPS,
-        terminate_on_success=True
+        terminate_on_success=EVAL_TERMINATE,
     )
 
     model.learn(
-            total_timesteps=TOTAL_TIMESTEPS,
-            callback=[checkpoint_callback, multi_eval_cb],
-            log_interval=10,
-            progress_bar=True
-        )
+        total_timesteps=TOTAL_TIMESTEPS,
+        callback=[checkpoint_callback, multi_eval_cb],
+        log_interval=10,
+        progress_bar=True,
+    )
 
-    model.save(f"./metaworld_models/{ALGORITHM.lower()}_MT3_final")
+    model.save(f"{paths['models']}/{ALGORITHM.lower()}_MT3_final")
 
     print("\n" + "=" * 60)
     print("Training complete!")
-    print(f"Final model saved to: ./metaworld_models/{ALGORITHM.lower()}_MT3_final.zip")
-    print(f"Best model saved to: ./metaworld_models/best_MT3_model.zip")
-    print(f"Checkpoints saved to: ./metaworld_models/checkpoints_MT3/")
-    print(f"\nTo monitor training, run: tensorboard --logdir=./metaworld_logs/")
+    print(f"Final model saved to: {paths['models']}/{ALGORITHM.lower()}_MT3_final.zip")
+    print(f"Best model saved to: {paths['best_model']}")
+    print(f"Checkpoints saved to: {paths['checkpoints']}")
+    print(f"\nTo monitor training, run: tensorboard --logdir={paths['logs']}/")
     print("=" * 60)
 
     env.close()

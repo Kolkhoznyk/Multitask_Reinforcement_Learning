@@ -11,17 +11,30 @@ Usage:
 """
 
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import yaml
 import gymnasium as gym
+import metaworld  # registers Meta-World namespace with gymnasium
 import numpy as np
 from stable_baselines3 import TD3, SAC, DDPG
 
+def load_config(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
 
 if __name__ == "__main__":
-    # Configuration
-    TASK_NAME = "reach-v3"  # Must match the task used for training (v3, not v2!)
-    ALGORITHM = "SAC"  # "TD3" or "SAC" - must match training algorithm
-    SEED = 42
-    MAX_EPISODE_STEPS = 500  # Must match training configuration
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg = load_config(os.path.join(_script_dir, "config_MT10.yaml"))
+
+    play_cfg      = cfg["play"]
+    ALGORITHM     = play_cfg["algorithm"]
+    TASK_NAME     = play_cfg["task_name"]
+    num_episodes  = play_cfg["num_episodes"]
+    RENDER_MODE   = play_cfg["render_mode"]
+    SEED          = cfg["experiment"]["seed"]
+    MAX_EPISODE_STEPS = cfg["experiment"]["max_episode_steps"]
+    paths         = cfg["paths"]
 
     # Create environment with rendering
     print(f"Creating {TASK_NAME} environment...")
@@ -29,20 +42,22 @@ if __name__ == "__main__":
         'Meta-World/MT1',
         env_name=TASK_NAME,
         seed=SEED,
-        render_mode='human',  # Enable visual rendering orig='human'
-        reward_function_version='v3',  # Use v2 reward (same as training)
-        max_episode_steps=MAX_EPISODE_STEPS,  # Episode length
-        terminate_on_success=False,  # Don't terminate early (for consistent evaluation)
+        render_mode=RENDER_MODE,
+        reward_function_version='v3',
+        max_episode_steps=MAX_EPISODE_STEPS,
+        terminate_on_success=False,
     )
 
-
     # Load the trained model
-    model_path = f"./metaworld_models/best_{TASK_NAME}/best_model.zip"
+    RUN_GROUP  = cfg["experiment"]["sac_disentangled_alpha"]
+    RUN_GROUP  = "disent_alpha" if RUN_GROUP else "baseline"
+    RUN_NAME   = f"MT10_SAC_{RUN_GROUP}"
+    model_path = f"{paths['models']}/best_{RUN_NAME}/best_model.zip"
 
     if not os.path.exists(model_path):
         print(f"Model not found at {model_path}")
         print("Trying final model instead...")
-        model_path = f"./metaworld_models/{ALGORITHM.lower()}_{TASK_NAME}_final.zip"
+        model_path = f"{paths['models']}/sac_{RUN_NAME}_final.zip"
 
         if not os.path.exists(model_path):
             print(f"No trained model found!")
@@ -58,9 +73,6 @@ if __name__ == "__main__":
         model = SAC.load(model_path, env=env)
     else:
         raise ValueError(f"Unknown algorithm: {ALGORITHM}")
-
-    # Run evaluation episodes
-    num_episodes = 10
     total_rewards = []
     success_count = 0
 

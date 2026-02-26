@@ -1,0 +1,71 @@
+experiment:
+  algorithm: SAC_DA   # SAC, SAC_DA, or PPO
+  seed: 42
+  total_timesteps: 9600000
+  max_episode_steps: 150
+
+tasks:
+  training:
+    - reach-v3
+    - push-v3
+    - pick-place-v3
+    - pick-place-v3
+    - pick-place-v3
+    - pick-place-v3
+    - pick-place-v3
+    - pick-place-v3
+  reward_scales:
+    reach-v3: 0.5
+    push-v3: 1.0
+    pick-place-v3: 1.0
+
+eval:
+  freq: 80000
+  n_episodes: 20
+  terminate_on_success: true
+
+checkpoint:
+  freq: 10000   # equals grad steps; multiply by len(training_tasks) for timestep freq
+
+paths:
+  models: ./metaworld_models
+  logs: ./metaworld_logs
+  best_model: ./metaworld_models/best_MT3_model.zip
+  checkpoints: ./metaworld_models/checkpoints_MT3/
+
+sac:
+  policy: MlpPolicy
+  learning_rate: 0.0002524548054563359
+  buffer_size: 300000
+  learning_starts: 10000
+  batch_size: 256
+  tau: 0.004187861038711214
+  gamma: 0.9493925038998
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: auto
+  target_entropy: auto
+  use_sde: false
+  policy_kwargs:
+    net_arch: [256, 256, 256]
+    activation_fn: ReLU
+    log_std_init: -3
+
+ppo:
+  policy: MlpPolicy
+  learning_rate: 0.0003
+  batch_size: 256
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.0
+  vf_coef: 0.5
+  policy_kwargs:
+    net_arch: [256, 256, 256]
+    activation_fn: ReLU
+
+play:
+  algorithm: SAC    # algorithm class used to load the model (SAC, PPO, DDPG, TD3)
+  seed: 40
+  num_episodes: 20
+  render_mode: human
