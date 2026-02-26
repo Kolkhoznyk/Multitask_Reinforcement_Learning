@@ -4,7 +4,7 @@ import csv
 from typing import Optional, List
 import gymnasium as gym
 import numpy as np
-from algos.sac_disentangled_alpha import SACDisentangledAlpha
+from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
 
 class SingleTaskOneHotWrapper(gym.Wrapper):
     def __init__(self, env, task_id, n_tasks, reward_scale=1.0):

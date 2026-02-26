@@ -12,7 +12,6 @@ Usage:
 
 import os
 import gymnasium as gym
-import metaworld
 import numpy as np
 from stable_baselines3 import TD3, SAC, DDPG, PPO
 
