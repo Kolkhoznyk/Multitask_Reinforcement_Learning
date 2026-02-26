@@ -1,8 +1,6 @@
 
 from __future__ import annotations
-
-from typing import Any, Dict, Optional, Tuple, Type, Union
-
+from typing import Type, Union
 import numpy as np
 import torch as th
 from torch import nn
@@ -56,9 +54,6 @@ class SACDisentangledAlpha(SAC):
         # New optimizer for the vector parameter
         self.ent_coef_optimizer = Adam([self.log_ent_coef_vec], lr=self.lr_schedule(1.0))
 
-        # Keep target_entropy exactly as SB3 sets it (often "auto" → -|A|)
-        # self.target_entropy already exists from SAC
-
     def _task_id_from_obs(self, obs: th.Tensor) -> th.Tensor:
         """
         obs: (batch, obs_dim)
@@ -77,10 +72,9 @@ class SACDisentangledAlpha(SAC):
         return alpha.unsqueeze(1)
 
     def train(self, gradient_steps: int, batch_size: int = 64) -> None:
-        # Mostly SB3 SAC.train(), with alpha replaced by per-task alpha
-
+        
         self.policy.set_training_mode(True)
-        self._update_learning_rate([self.actor.optimizer, self.critic.optimizer, self.ent_coef_optimizer])
+        self._update_learning_rate([self.actor.optimizer, self.critic.optimizer, self.ent_coef_optimizer]) # type: ignore
 
         # Loggers (SB3 expects these keys sometimes)
         ent_coef_losses, ent_coefs = [], []
@@ -88,7 +82,7 @@ class SACDisentangledAlpha(SAC):
 
         for _ in range(gradient_steps):
             # Sample replay buffer
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env) # type: ignore
 
             obs = replay_data.observations
             next_obs = replay_data.next_observations
@@ -108,11 +102,11 @@ class SACDisentangledAlpha(SAC):
             # SB3 scalar version: ent_coef_loss = -(log_ent_coef * (log_prob + target_entropy).detach()).mean()
             # Here: select log_ent_coef per sample by task_id.
             log_ent_coef_task = self.log_ent_coef_vec[task_id].reshape(-1, 1)
-            ent_coef_loss = -(log_ent_coef_task * (log_prob + self.target_entropy).detach()).mean()
+            ent_coef_loss = -(log_ent_coef_task * (log_prob + float(self.target_entropy)).detach()).mean()
 
-            self.ent_coef_optimizer.zero_grad()
+            self.ent_coef_optimizer.zero_grad() # type: ignore
             ent_coef_loss.backward()
-            self.ent_coef_optimizer.step()
+            self.ent_coef_optimizer.step() # type: ignore
 
             # --- Critic target ---
             with th.no_grad():
@@ -132,7 +126,7 @@ class SACDisentangledAlpha(SAC):
             critic_loss = 0.5 * sum((q - target_q).pow(2).mean() for q in current_q_values)
 
             self.critic.optimizer.zero_grad()
-            critic_loss.backward()
+            critic_loss.backward() # type: ignore
             self.critic.optimizer.step()
 
             # --- Actor loss ---
@@ -151,7 +145,7 @@ class SACDisentangledAlpha(SAC):
             # Collect logs
             ent_coef_losses.append(ent_coef_loss.item())
             actor_losses.append(actor_loss.item())
-            critic_losses.append(critic_loss.item())
+            critic_losses.append(critic_loss.item()) # type: ignore
 
             # for logging: mean alpha over batch
             ent_coefs.append(float(alpha.mean().detach().cpu().item()))

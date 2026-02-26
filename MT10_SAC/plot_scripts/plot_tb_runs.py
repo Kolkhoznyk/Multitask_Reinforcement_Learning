@@ -70,15 +70,19 @@ def aggregate_curves(curves: list[tuple[np.ndarray, np.ndarray]], grid: np.ndarr
     return mean, ci95
 
 
-def plot_mean_with_ci(ax, grid, mean, ci, label):
+def plot_mean_with_ci(ax, grid, mean, ci, label) -> None:
     ax.plot(grid, mean, label=label)
     ax.fill_between(grid, mean - ci, mean + ci, alpha=0.2)
 
-def nearest_interp_on_grid(steps, vals, grid):
-    """Interpolate curve onto provided grid. Returns np.ndarray same len as grid."""
+def nearest_interp_on_grid(
+    steps: np.ndarray, vals: np.ndarray, grid: np.ndarray
+) -> np.ndarray:
+    """Interpolate curve onto provided grid. Returns array with same length as grid."""
     return interp_to_grid(steps, vals, grid)
 
-def aggregate_group_tag(g_runs, tag):
+def aggregate_group_tag(
+    g_runs: list, tag: str
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
     """Return (grid, mean, ci) for a group for a given tag, or None if missing."""
     curves = []
     all_steps = []
@@ -94,9 +98,10 @@ def aggregate_group_tag(g_runs, tag):
     mean, ci = aggregate_curves(curves, grid)
     return grid, mean, ci
 
-def align_two_series(grid_a, y_a, grid_b, y_b):
+def align_two_series(
+    grid_a: np.ndarray, y_a: np.ndarray, grid_b: np.ndarray, y_b: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Align two mean curves by interpolating both onto a common grid (intersection)."""
-    # safest: use intersection grid range
     lo = max(grid_a.min(), grid_b.min())
     hi = min(grid_a.max(), grid_b.max())
     grid = np.unique(np.concatenate([grid_a, grid_b]))
@@ -105,10 +110,12 @@ def align_two_series(grid_a, y_a, grid_b, y_b):
     yb = np.interp(grid, grid_b, y_b)
     return grid, ya, yb
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--logdirs", nargs="+", required=True,
-                        help="List of run log directories (each contains events.out.tfevents.* somewhere inside).")
+    parser.add_argument(
+        "--logdirs", nargs="+", required=True,
+        help="Run log directories (each contains events.out.tfevents.* somewhere inside).",
+    )
     parser.add_argument("--outdir", default="report_figures", help="Output directory for figures.")
     parser.add_argument("--num_tasks", type=int, default=10)
     args = parser.parse_args()
@@ -117,7 +124,6 @@ def main():
 
     num_tasks = args.num_tasks
 
-    # Tags we expect
     TAG_SUCCESS_MEAN = "task/ep_success_rate_mean"
     TAG_EVAL_REWARD = "eval/mean_reward"
     TAG_CRITIC_LOSS = "train/critic_loss"
@@ -127,20 +133,23 @@ def main():
     alpha_tags = [f"alpha/alpha_task_{k}" for k in range(num_tasks)]
     sample_frac_tags = [f"task/sample_frac_task_{k}" for k in range(num_tasks)]
 
-    # Load all runs
+    all_tags = (
+        [TAG_SUCCESS_MEAN, TAG_EVAL_REWARD, TAG_CRITIC_LOSS, TAG_UNIFORM_DEV]
+        + task_success_tags + alpha_tags + sample_frac_tags
+    )
+
     runs = []
     for ld in args.logdirs:
-        tags = [TAG_SUCCESS_MEAN, TAG_EVAL_REWARD, TAG_CRITIC_LOSS, TAG_UNIFORM_DEV] + task_success_tags + alpha_tags + sample_frac_tags
+        tags = all_tags
         data = load_scalars(ld, tags)
         runs.append((ld, data))
 
-    # Group by algorithm name from path
-    groups = {}
+    groups: dict[str, list] = {}
     for ld, data in runs:
         g = group_name_from_path(ld)
         groups.setdefault(g, []).append((ld, data))
 
-    # ---------------- Plot 1: Success mean across tasks (aggregated over seeds) ----------------
+    # -- Plot 1: Mean success across tasks (aggregated over seeds) --
     fig, ax = plt.subplots()
     ax.set_title("Mean success across MT10 tasks")
     ax.set_xlabel("Timesteps")
@@ -168,19 +177,19 @@ def main():
     fig.savefig(os.path.join(args.outdir, "success_mean_ci.png"), dpi=200)
     plt.close(fig)
 
-    # ---------------- Plot 1b: Delta success (disent - baseline) ----------------
-    def pick_group(name_substr):
+    # -- Plot 1b: Delta success (disent - baseline) --
+    def pick_group(name_substr: str) -> str | None:
         for gname in groups.keys():
             if name_substr in gname:
                 return gname
         return None
 
-    g_base = pick_group("baseline") # wichtig, name immer richtig eingeben in train script
+    g_base = pick_group("baseline") 
     g_dis  = pick_group("disent")
 
     if g_base is not None and g_dis is not None:
         base_stats = aggregate_group_tag(groups[g_base], TAG_SUCCESS_MEAN)
-        dis_stats  = aggregate_group_tag(groups[g_dis],  TAG_SUCCESS_MEAN)
+        dis_stats = aggregate_group_tag(groups[g_dis], TAG_SUCCESS_MEAN)
 
         if base_stats is not None and dis_stats is not None:
             grid_b, mean_b, _ = base_stats
@@ -190,17 +199,16 @@ def main():
             delta = md - mb
 
             fig, ax = plt.subplots()
-            ax.set_title("Δ Mean success (disent - baseline)")
+            ax.set_title("Delta mean success (disent - baseline)")
             ax.set_xlabel("Timesteps")
-            ax.set_ylabel("Δ Success rate")
+            ax.set_ylabel("Delta success rate")
             ax.plot(grid, delta)
             ax.axhline(0.0, linewidth=1)
             fig.tight_layout()
             fig.savefig(os.path.join(args.outdir, "delta_success_mean.png"), dpi=200)
             plt.close(fig)
 
-    # ---------------- Plot 2: Heatmap per-task success for ONE representative run per group ----------------
-    # (For report: one heatmap per method; pick the first run in group.)
+    # -- Plot 2: Per-task success heatmap (first run per group) --
     for gname, g_runs in groups.items():
         ld0, data0 = g_runs[0]
         # Build common grid from tasks that exist
@@ -228,13 +236,12 @@ def main():
 
         fig, ax = plt.subplots()
         im = ax.imshow(
-                        M,
-                        aspect="auto",
-                        origin="lower",
-                        extent=[grid[0], grid[-1], -0.5, num_tasks - 0.5]
-                    )
+            M,
+            aspect="auto",
+            origin="lower",
+            extent=(grid[0], grid[-1], -0.5, num_tasks - 0.5),
+        )
         ax.set_xlabel("Timesteps")
-
         ax.set_ylabel("Task id")
         ax.set_yticks(np.arange(num_tasks))
         ax.set_yticklabels([f"task_{i}" for i in range(num_tasks)])
@@ -246,7 +253,7 @@ def main():
         fig.savefig(os.path.join(args.outdir, f"heatmap_success_{gname}.png"), dpi=200)
         plt.close(fig)
 
-    # ---------------- Plot 3: Stability (critic loss) + Uniform sampling deviation ----------------
+    # -- Plot 3: Critic loss + uniform sampling deviation --
     fig, ax = plt.subplots()
     ax.set_title("Critic loss (stability indicator)")
     ax.set_xlabel("Timesteps")
@@ -272,10 +279,10 @@ def main():
     fig.savefig(os.path.join(args.outdir, "critic_loss_ci.png"), dpi=200)
     plt.close(fig)
 
-    # ---------------- Plot 3b: Delta critic loss (disent - baseline) ----------------
+    # -- Plot 3b: Delta critic loss (disent - baseline) --
     if g_base is not None and g_dis is not None:
         base_stats = aggregate_group_tag(groups[g_base], TAG_CRITIC_LOSS)
-        dis_stats  = aggregate_group_tag(groups[g_dis],  TAG_CRITIC_LOSS)
+        dis_stats = aggregate_group_tag(groups[g_dis], TAG_CRITIC_LOSS)
 
         if base_stats is not None and dis_stats is not None:
             grid_b, mean_b, _ = base_stats
@@ -285,9 +292,9 @@ def main():
             delta = md - mb
 
             fig, ax = plt.subplots()
-            ax.set_title("Δ Critic loss (disent - baseline)")
+            ax.set_title("Delta critic loss (disent - baseline)")
             ax.set_xlabel("Timesteps")
-            ax.set_ylabel("Δ Critic loss")
+            ax.set_ylabel("Delta critic loss")
             ax.plot(grid, delta)
             ax.axhline(0.0, linewidth=1)
             fig.tight_layout()
@@ -319,7 +326,7 @@ def main():
     fig.savefig(os.path.join(args.outdir, "uniform_sampling_dev_ci.png"), dpi=200)
     plt.close(fig)
 
-    # ---------------- Plot 4: Disentangled alpha per task (one representative run per group) ----------------
+    # -- Plot 4: Disentangled alpha per task (first run per group) --
     for gname, g_runs in groups.items():
         ld0, data0 = g_runs[0]
         # only if alpha tags exist

@@ -12,11 +12,8 @@ Usage:
 
 import os
 import gymnasium as gym
-import metaworld
 import numpy as np
 from stable_baselines3 import TD3, SAC, DDPG
-from gymnasium.wrappers import RecordVideo
-
 
 
 if __name__ == "__main__":
@@ -38,17 +35,6 @@ if __name__ == "__main__":
         terminate_on_success=False,  # Don't terminate early (for consistent evaluation)
     )
 
-    """
-    # Speicherpfad Video
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    video_folder = os.path.join(base_dir, "videos_reach_td3")
-
-    env = RecordVideo(
-    env,
-    video_folder=video_folder,
-    episode_trigger=lambda ep_id: ep_id == 0  # z.B. nur Episode 0 aufnehmen
-    )
-    """
 
     # Load the trained model
     model_path = f"./metaworld_models/best_{TASK_NAME}/best_model.zip"
@@ -85,7 +71,7 @@ if __name__ == "__main__":
         obs, info = env.reset()
         done = False
         truncated = False
-        total_reward = 0
+        total_reward = 0.0
         steps = 0
         episode_success = False
 
@@ -98,7 +84,7 @@ if __name__ == "__main__":
             # Step environment
             obs, reward, done, truncated, info = env.step(action)
 
-            total_reward += reward
+            total_reward += float(reward)
             steps += 1
 
             # Check for success (Meta-World provides success info)

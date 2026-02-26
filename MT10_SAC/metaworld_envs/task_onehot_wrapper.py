@@ -1,6 +1,7 @@
 # task_onehot_wrapper.py
 import numpy as np
 import gymnasium as gym
+from typing import Any
 
 
 class TaskOneHotObsWrapper(gym.ObservationWrapper):
@@ -17,7 +18,8 @@ class TaskOneHotObsWrapper(gym.ObservationWrapper):
 
         assert hasattr(env, "num_tasks"), "Wrapped env must expose env.num_tasks"
         assert hasattr(env, "current_task_id"), "Wrapped env must expose env.current_task_id"
-        self.num_tasks = int(env.num_tasks)
+        _env: Any = env
+        self.num_tasks = int(_env.num_tasks)
 
         assert isinstance(env.observation_space, gym.spaces.Box), "Only Box observation spaces are supported"
 
@@ -29,7 +31,7 @@ class TaskOneHotObsWrapper(gym.ObservationWrapper):
         low_aug = np.concatenate([low, np.zeros((self.num_tasks,), dtype=low.dtype)], axis=0)
         high_aug = np.concatenate([high, np.ones((self.num_tasks,), dtype=high.dtype)], axis=0)
 
-        self.observation_space = gym.spaces.Box(low=low_aug, high=high_aug, dtype=env.observation_space.dtype)
+        self.observation_space = gym.spaces.Box(low=low_aug, high=high_aug, dtype=env.observation_space.dtype.type)
 
         # Cached onehot (updated at reset)
         self._onehot = np.zeros((self.num_tasks,), dtype=np.float32)
@@ -49,7 +51,7 @@ class TaskOneHotObsWrapper(gym.ObservationWrapper):
         info["task_onehot_id"] = task_id
         return obs_aug, info
 
-    def observation(self, obs):
-        # obs: (obs_dim,)
-        obs = np.asarray(obs)
-        return np.concatenate([obs, self._onehot], axis=0)
+    def observation(self, observation):
+        # observation: (obs_dim,)
+        observation = np.asarray(observation)
+        return np.concatenate([observation, self._onehot], axis=0)

@@ -14,24 +14,19 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 """
 
 import os
-import warnings
 import random
 
-import gymnasium as gym
-import metaworld
 import numpy as np
 import torch
-from stable_baselines3 import TD3, DDPG, SAC, PPO
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback, BaseCallback, StopTrainingOnRewardThreshold
+from stable_baselines3 import SAC
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from metaworld_envs.mt10_env import MetaWorldMT10Env
 from metaworld_envs.task_onehot_wrapper import TaskOneHotObsWrapper
 from callbacks.task_metrics import MT10TaskMetricsCallback
-from algo_sac_disent_alpha.sac_disentangled_alpha import SACDisentangledAlpha
-
+from algos.sac_disentangled_alpha import SACDisentangledAlpha
 
 
 def set_global_seeds(seed: int) -> None:
@@ -171,11 +166,11 @@ if __name__ == "__main__":
     # Debug: observation & one-hot sanity check
     # ------------------------------------------------------
     obs = env.reset()
-    print("\nAugmented obs shape:", obs.shape)
+    print("\nAugmented obs shape:", obs.shape) # type: ignore
     print("Single obs dim:", env.observation_space.shape)
 
     num_tasks = 10
-    onehot = obs[:, -num_tasks:]
+    onehot = obs[:, -num_tasks:] # type: ignore
     assert np.allclose(onehot.sum(axis=1), 1.0), "Invalid one-hot task encoding!"
 
     # ------------------------------------------------------
@@ -223,7 +218,7 @@ if __name__ == "__main__":
             "MlpPolicy",
             env,
             tensorboard_log="./metaworld_logs/baseline",
-            **COMMON_SAC_ARGS,
+            **COMMON_SAC_ARGS, # type: ignore
         )
 
     # ------------------------------------------------------
@@ -277,9 +272,6 @@ if __name__ == "__main__":
 
     env.close()
     eval_env.close()
-
-
-
 
 
     """ Standard SAC hyperparameters for reference
