@@ -83,6 +83,7 @@ lightning_logs/
 models/
 
 # Images and videos 
+*.png
 *.jpeg
 *.mp4
 *.mov

@@ -2,9 +2,12 @@
 
 **Course Project: Autonomous Systems Lab (ASL)**  
 *Institute of Computer Technology (ICT), Vienna, Austria*
+## Repository Structure
 
-
-## 📝 Project Overview
+- **`ST_SAC/`** -- Single-task SAC training, evaluation, and hyperparameter optimization with Optuna.
+- **`MT3_SAC/`** -- Multi-task SAC on 3 tasks (Reach, Push, Pick-Place) with environment balancing and reward scaling.
+- **`MT10_SAC/`** -- Multi-task SAC on 10 tasks with one-hot task conditioning, disentangled per-task entropy coefficients, and TensorBoard plotting scripts.
+## Project Overview
 
 This project investigates the training of robotic learning agents in the **Meta-World** environment using the **Soft Actor-Critic (SAC)** algorithm. The research progresses from **Single-Task (ST)** settings to **Multi-Task (MT)** scenarios (MT3 and MT10).
 
@@ -15,7 +18,7 @@ The primary goal was to design, train, and evaluate the RL SAC algorithm to hand
 *   Reward scaling.
 *   Disentangled entropy coefficients.
 
-## 🧠 Methodology
+## Methodology
 
 We utilized **Soft Actor-Critic (SAC)** as the baseline algorithm due to its sample efficiency and stability in continuous control tasks.
 
@@ -30,7 +33,7 @@ Standard SAC uses a global entropy coefficient ($\alpha$). In the multi-task set
 
 ---
 
-## 📊 Experiments & Results
+## Experiments & Results
 
 ### 1. Single-Task (ST)
 We established baselines for *Reach*, *Push*, and *Pick-Place*.
