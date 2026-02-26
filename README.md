@@ -7,6 +7,57 @@
 - **`ST_SAC/`** -- Single-task SAC training, evaluation, and hyperparameter optimization with Optuna.
 - **`MT3_SAC/`** -- Multi-task SAC on 3 tasks (Reach, Push, Pick-Place) with environment balancing and reward scaling.
 - **`MT10_SAC/`** -- Multi-task SAC on 10 tasks with one-hot task conditioning, disentangled per-task entropy coefficients, and TensorBoard plotting scripts.
+
+## How to Use
+
+Each folder (`ST_SAC/`, `MT3_SAC/`, `MT10_SAC/`) follows the same workflow.
+
+**1. Train a model**
+
+Open the `config_*.yaml` file in the folder you want to use. The default hyperparameters from the study are already set, but you can adjust them freely. Then run the training script:
+
+```bash
+# Example for single-task
+python ST_SAC/train_metaworld_sb3.py
+
+# Example for multi-task (3 tasks)
+python MT3_SAC/train_metaworld_sb3_MT3_v2.py
+
+# Example for multi-task (10 tasks)
+python MT10_SAC/train_metaworld_sb3.py
+```
+
+The best and final models are saved automatically to the `metaworld_models/` directory inside each folder.
+
+**2. Watch the trained agent**
+
+Set the `play` section of the config file (task name, number of episodes, render mode) and run the play script:
+
+```bash
+python ST_SAC/play_metaworld_sb3.py
+python MT3_SAC/play_metaworld_sb3.py
+python MT10_SAC/play_metaworld_sb3.py
+```
+
+**3. Hyperparameter search (single-task only)**
+
+Define the search space in `ST_SAC/optuna_study.py`, then launch the study:
+
+```bash
+python ST_SAC/start_study.py
+```
+
+Results are stored in a SQLite database under `optuna_db_files/`. The best hyperparameters are printed at the end.
+
+**4. Evaluate checkpoints**
+
+To track how performance evolved during training, run `get_success_rate.py` with the appropriate arguments:
+
+```bash
+python ST_SAC/get_success_rate.py --task pick-place-v3 --checkpoint-dir ./metaworld_models/checkpoints_pick-place-v3/
+```
+
+Pass `--help` to see all available options.
 ## Project Overview
 
 This project investigates the training of robotic learning agents in the **Meta-World** environment using the **Soft Actor-Critic (SAC)** algorithm. The research progresses from **Single-Task (ST)** settings to **Multi-Task (MT)** scenarios (MT3 and MT10).
