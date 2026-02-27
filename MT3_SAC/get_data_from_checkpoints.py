@@ -3,6 +3,7 @@ import csv
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import yaml
 import gymnasium as gym
 import numpy as np
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
@@ -11,18 +12,29 @@ from utils.checkpoint import extract_step_from_filename, list_checkpoint_files
 from utils.evaluation import evaluate_model_on_env
 
 
+def load_config(path: str) -> dict:
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+
 def main():
-    TASK_NAMES = ["reach-v3", "push-v3", "pick-place-v3"]
-    REWARD_SCALES = [0.5, 1, 1.2]
-    ALGORITHM = "SAC"
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg = load_config(os.path.join(_script_dir, "config_MT3.yaml"))
 
-    N_EVAL_EPISODES = 20
-    MAX_EPISODE_STEPS = 150
-    SEED = 30
+    training_tasks = cfg["tasks"]["training"]
+    reward_scales_dict = cfg["tasks"]["reward_scales"]
+    TASK_NAMES = list(dict.fromkeys(training_tasks))   # unique tasks, insertion order
+    REWARD_SCALES = [reward_scales_dict[t] for t in TASK_NAMES]
+    ALGORITHM = cfg["experiment"]["algorithm"]
 
-    EXP = "MT3_1"
-    CHECKPOINT_DIR = "./metaworld_models/checkpoints_MT3/"
-    OUTPUT_CSV = f"./analysis/checkpoints_eval_{EXP}.csv"
+    N_EVAL_EPISODES = cfg["eval"]["n_episodes"]
+    MAX_EPISODE_STEPS = cfg["experiment"]["max_episode_steps"]
+
+    ce = cfg["checkpoint_eval"]
+    SEED = ce["seed"]
+    EXP = ce["exp_name"]
+    CHECKPOINT_DIR = cfg["paths"]["checkpoints"]
+    OUTPUT_CSV = f"{ce['output_dir']}/checkpoints_eval_{EXP}.csv"
 
     if not os.path.isdir(CHECKPOINT_DIR):
         raise FileNotFoundError(f"Checkpoint dir not found: {CHECKPOINT_DIR}")
@@ -64,7 +76,7 @@ def main():
             print(f"[skip] model missing: {model_path}")
             continue
 
-        if ALGORITHM == "SAC":
+        if ALGORITHM in ("SAC", "SAC_DA"):
             model = SACDisentangledAlpha.load(model_path)
         else:
             raise ValueError(f"Unknown algorithm: {ALGORITHM}")

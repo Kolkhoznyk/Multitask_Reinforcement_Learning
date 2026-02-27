@@ -69,3 +69,8 @@ play:
   seed: 40
   num_episodes: 20
   render_mode: human
+
+checkpoint_eval:
+  seed: 30
+  exp_name: MT3_1
+  output_dir: ./analysis

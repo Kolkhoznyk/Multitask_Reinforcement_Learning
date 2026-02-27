@@ -15,6 +15,8 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 
 import os
 import sys
+
+import torch
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.dirname(_script_dir)
 sys.path.insert(0, _script_dir)

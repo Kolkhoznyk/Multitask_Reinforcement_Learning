@@ -13,7 +13,7 @@ def main():
         "benchmark_id": "Meta-World/MT1",
         "env_name": "reach-v3",
         "seed": 42,
-        "algorithm": "PPO",
+        "algorithm": "SAC",
 
         "reward_function_version": "v3",
         "terminate_on_success": False,
