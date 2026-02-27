@@ -15,33 +15,19 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import yaml
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.dirname(_script_dir)
+sys.path.insert(0, _script_dir)
+sys.path.insert(0, _root_dir)
+
 import gymnasium as gym
 import metaworld  # registers Meta-World namespace with gymnasium
-import torch
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
-_ACTIVATION_FNS = {
-    "ReLU": torch.nn.ReLU,
-    "Tanh": torch.nn.Tanh,
-    "ELU": torch.nn.ELU,
-}
-
-def load_config(path: str) -> dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-
-def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
-    kwargs = dict(policy_kwargs)
-    if "activation_fn" in kwargs:
-        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
-    if "net_arch" in kwargs:
-        kwargs["net_arch"] = list(kwargs["net_arch"])
-    return kwargs
+from utils.config import load_config, resolve_policy_kwargs
 
 
 
