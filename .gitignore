@@ -75,7 +75,8 @@ Thumbs.db
 # Project-specific ignores
 # ============================================
 
-# PyTorch Lightning logs
+# TensorBoard / training logs
+metaworld_logs/
 lightning_logs/
 
 # Model weights (large files)
