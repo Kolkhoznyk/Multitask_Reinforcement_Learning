@@ -1,8 +1,23 @@
-gymnasium
-matplotlib
-metaworld
-numpy
-optuna
-stable-baselines3
-tensorboard
-torch
+# Core RL framework
+stable-baselines3>=2.7.0
+
+# Meta-World benchmark environments
+metaworld>=3.0.0
+
+# Gym API
+gymnasium>=1.2.0
+
+# Deep learning backend
+# NOTE: Install the CUDA-specific wheel separately if you have a GPU, e.g.:
+#   pip install torch>=2.6.0 --index-url https://download.pytorch.org/whl/cu124
+torch>=2.6.0
+
+# Numerical computing
+numpy>=2.2.0
+
+# Hyperparameter optimisation
+optuna>=4.6.0
+
+# Experiment tracking and visualisation
+tensorboard>=2.19.0
+matplotlib>=3.10.0
