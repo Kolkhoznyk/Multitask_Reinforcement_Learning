@@ -15,12 +15,13 @@ For hyperparameter tuning guide, see: METAWORLD_TUNING.md
 
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.dirname(_script_dir)
+sys.path.insert(0, _script_dir)
+sys.path.insert(0, _root_dir)
 import random
-import yaml
 
 import numpy as np
-import torch
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.monitor import Monitor
@@ -28,27 +29,10 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from metaworld_envs.mt10_env import MetaWorldMT10Env
 from metaworld_envs.task_onehot_wrapper import TaskOneHotObsWrapper
-from callbacks.task_metrics import MT10TaskMetricsCallback
 from algos.sac_disentangled_alpha import SACDisentangledAlpha
+from utils.callbacks import MT10TaskMetricsCallback
+from utils.config import load_config, resolve_policy_kwargs
 import metaworld  # registers Meta-World namespace with gymnasium
-
-_ACTIVATION_FNS = {
-    "ReLU": torch.nn.ReLU,
-    "Tanh": torch.nn.Tanh,
-    "ELU": torch.nn.ELU,
-}
-
-def load_config(path: str) -> dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-
-def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
-    kwargs = dict(policy_kwargs)
-    if "activation_fn" in kwargs:
-        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
-    if "net_arch" in kwargs:
-        kwargs["net_arch"] = list(kwargs["net_arch"])
-    return kwargs
 
 
 def set_global_seeds(seed: int) -> None:

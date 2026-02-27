@@ -1,86 +1,14 @@
 import os
-import re
 import csv
-from typing import Optional, List
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import gymnasium as gym
 import numpy as np
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
-
-class SingleTaskOneHotWrapper(gym.Wrapper):
-    """
-    Gym wrapper that appends a one-hot task encoding to every observation and
-    optionally scales the reward. Used to condition a shared policy on the
-    current task identity without modifying the underlying environment.
-    """
-    def __init__(self, env, task_id, n_tasks, reward_scale=1.0):
-        super().__init__(env)
-        self.task_id = task_id
-        self.n_tasks = n_tasks
-        self.reward_scale = reward_scale
-
-        obs_space = self.env.observation_space
-        self.observation_space = gym.spaces.Box(
-            low=np.concatenate([obs_space.low, np.zeros(self.n_tasks)]), # type: ignore
-            high=np.concatenate([obs_space.high, np.ones(self.n_tasks)]), # type: ignore
-            dtype=np.float32
-        )
-
-    def reset(self, **kwargs):
-        obs, info = self.env.reset(**kwargs)
-        return self._one_hot_obs(obs), info
-
-    def step(self, action):
-        obs, reward, terminated, truncated, info = self.env.step(action)
-        return self._one_hot_obs(obs), reward * self.reward_scale, terminated, truncated, info # type: ignore
-
-    def _one_hot_obs(self, obs):
-        one_hot = np.zeros(self.n_tasks, dtype=np.float32)
-        one_hot[self.task_id] = 1.0
-        return np.concatenate([np.array(obs, dtype=np.float32), one_hot])
-
-def extract_step_from_filename(fname: str) -> Optional[int]:
-    step_re = re.compile(r"_(\d+)_steps\.zip$")
-    m = step_re.search(fname)
-    return int(m.group(1)) if m else None
-
-def list_checkpoint_files(checkpoint_dir: str) -> List[str]:
-    files = [
-        f for f in os.listdir(checkpoint_dir)
-        if f.endswith(".zip")
-    ]
-
-    def sort_key(f):
-        step = extract_step_from_filename(f)
-        return (0, step) if step is not None else (1, f)
-    
-    files.sort(key=sort_key)
-    return [os.path.join(checkpoint_dir, f) for f in files]
-
-
-def evaluate_model_on_env(model, env, n_eval_episodes: int):
-    ep_rews = []
-    successes = []
-
-    for _ in range(n_eval_episodes):
-        obs, _ = env.reset()
-        done = False
-        total_reward = 0.0
-        success = 0
-
-        while not done:
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-            total_reward += float(reward)
-
-            # Single env => info is a dict
-            if isinstance(info, dict) and info.get("success", 0) == 1:
-                success = 1
-
-        ep_rews.append(total_reward)
-        successes.append(success)
-
-    return float(np.mean(ep_rews)), float(np.mean(successes))
+from utils.wrappers import SingleTaskOneHotWrapper
+from utils.checkpoint import extract_step_from_filename, list_checkpoint_files
+from utils.evaluation import evaluate_model_on_env
 
 
 def main():
@@ -101,7 +29,7 @@ def main():
     checkpoint_files = list_checkpoint_files(CHECKPOINT_DIR)
     if not checkpoint_files:
         raise RuntimeError("No checkpoint .zip files found")
-    
+
     os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
 
     # --- 1) Create eval environments once ---
@@ -129,7 +57,7 @@ def main():
     ]
     rows = []
 
-     # For each checkpoint evaluate tasks!
+    # For each checkpoint evaluate tasks!
     for model_path in checkpoint_files:
         step = extract_step_from_filename(model_path)
         if not os.path.exists(model_path):
@@ -162,15 +90,15 @@ def main():
         rows.append(row)
 
         print(f"Step {step}: "
-                f"reach SR={task_success_rates[0]:.2f}, "
-                f"push SR={task_success_rates[1]:.2f}, "
-                f"pick SR={task_success_rates[2]:.2f}, "
-                f"avg SR={avg_mean_sr:.2f}")
+              f"reach SR={task_success_rates[0]:.2f}, "
+              f"push SR={task_success_rates[1]:.2f}, "
+              f"pick SR={task_success_rates[2]:.2f}, "
+              f"avg SR={avg_mean_sr:.2f}")
 
     for env in eval_envs:
         env.close()
 
-    # Write to csv 
+    # Write to csv
     with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(header)

@@ -1,35 +1,16 @@
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import yaml
 import gymnasium as gym
 import numpy as np
-import torch
 from stable_baselines3 import SAC, PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from MT10_SAC.algos.sac_disentangled_alpha import SACDisentangledAlpha
-from get_data_from_checkpoints import SingleTaskOneHotWrapper
+from utils.wrappers import SingleTaskOneHotWrapper
+from utils.config import load_config, resolve_policy_kwargs
 import metaworld  # registers Meta-World namespace with gymnasium in each subprocess
-
-_ACTIVATION_FNS = {
-    "ReLU": torch.nn.ReLU,
-    "Tanh": torch.nn.Tanh,
-    "ELU": torch.nn.ELU,
-}
-
-def load_config(path: str) -> dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
-
-def resolve_policy_kwargs(policy_kwargs: dict) -> dict:
-    kwargs = dict(policy_kwargs)
-    if "activation_fn" in kwargs:
-        kwargs["activation_fn"] = _ACTIVATION_FNS[kwargs["activation_fn"]]
-    if "net_arch" in kwargs:
-        kwargs["net_arch"] = list(kwargs["net_arch"])
-    return kwargs
        
 def make_env(task_name, task_id, n_tasks, rew_scale, rank, seed, max_steps, terminate_on_success=False):
     def _init():      

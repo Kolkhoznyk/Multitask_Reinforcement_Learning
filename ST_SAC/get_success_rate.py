@@ -2,11 +2,12 @@ import argparse
 import csv
 import logging
 import os
-import re
-from typing import Optional
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import gymnasium as gym
 from stable_baselines3 import SAC
+from utils.checkpoint import extract_step_from_filename, list_checkpoint_files
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -15,8 +16,6 @@ logger = logging.getLogger(__name__)
 SUPPORTED_ALGORITHMS = {
     "SAC": SAC,
 }
-
-_STEP_RE = re.compile(r"_(\d+)_steps\.zip$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,22 +52,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--render", action="store_true", help="Enable visual rendering.")
     return parser.parse_args()
-
-
-def extract_step_from_filename(fname: str) -> Optional[int]:
-    m = _STEP_RE.search(fname)
-    return int(m.group(1)) if m else None
-
-
-def list_checkpoint_files(checkpoint_dir: str) -> list:
-    files = [f for f in os.listdir(checkpoint_dir) if f.endswith(".zip")]
-
-    def sort_key(f: str) -> tuple:
-        step = extract_step_from_filename(f)
-        return (0, step) if step is not None else (1, f)
-
-    files.sort(key=sort_key)
-    return [os.path.join(checkpoint_dir, f) for f in files]
 
 
 def evaluate_checkpoint(
